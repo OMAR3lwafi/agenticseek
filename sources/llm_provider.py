@@ -122,15 +122,26 @@ class Provider:
             requests.post(route_setup, json={"model": self.model})
             requests.post(route_gen, json={"messages": history})
             is_complete = False
+            poll_interval = 0.5
+            max_poll_interval = 5.0
+            backoff_multiplier = 1.5
+            
             while not is_complete:
                 try:
                     response = requests.get(f"{self.server_ip}/get_updated_sentence")
                     if "error" in response.json():
                         pretty_print(response.json()["error"], color="failure")
                         break
-                    thought = response.json()["sentence"]
-                    is_complete = bool(response.json()["is_complete"])
-                    time.sleep(2)
+                    
+                    response_data = response.json()
+                    thought = response_data["sentence"]
+                    is_complete = bool(response_data["is_complete"])
+                    
+                    if not is_complete:
+                        time.sleep(poll_interval)
+                        poll_interval = min(poll_interval * backoff_multiplier, max_poll_interval)
+                    else:
+                        poll_interval = 0.5
                 except requests.exceptions.RequestException as e:
                     pretty_print(f"HTTP request failed: {str(e)}", color="failure")
                     break
